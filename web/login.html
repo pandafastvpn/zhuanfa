@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 转发面板</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <h1>转发面板</h1>
+      <div class="desc">SOCKS5 / WireGuard / OpenVPN 流量转发控制台</div>
+      <div class="form-row">
+        <label>用户名</label>
+        <input type="text" id="username" autocomplete="username">
+      </div>
+      <div class="form-row">
+        <label>密码</label>
+        <input type="password" id="password" autocomplete="current-password">
+      </div>
+      <button class="btn" id="loginBtn">登 录</button>
+      <div class="auth-foot" id="registerLink" style="display:none">
+        还没有账号？<a href="/register">立即注册</a>
+      </div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+  <script>
+    (async function () {
+      const me = await onloadGuard();
+      if (me && location.pathname === '/login') {
+        location.href = me.user.role === 'admin' ? '/admin' : '/user';
+        return;
+      }
+      // 是否开放注册
+      try {
+        const st = await api('GET', '/api/me');
+        if (st && st.allow_register) document.getElementById('registerLink').style.display = '';
+      } catch (e) { /* 未登录 */ }
+
+      async function doLogin() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        if (!username || !password) { toast('请输入用户名和密码', 'err'); return; }
+        const btn = document.getElementById('loginBtn');
+        btn.disabled = true;
+        try {
+          const d = await api('POST', '/api/login', { username, password });
+          toast('登录成功');
+          location.href = d.role === 'admin' ? '/admin' : '/user';
+        } catch (err) {
+          toast(err.message, 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+      document.getElementById('loginBtn').addEventListener('click', doLogin);
+      document.getElementById('password').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doLogin();
+      });
+    })();
+  </script>
+</body>
+</html>

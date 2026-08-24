@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户中心 - 转发面板</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">转发面板 · 用户中心</div>
+    <nav>
+      <a data-page="overview" class="active">概览</a>
+      <a data-page="ports">我的端口</a>
+      <a data-page="records">使用记录</a>
+      <a data-page="password">修改密码</a>
+    </nav>
+    <div style="margin-top:auto">
+      <div class="muted" style="padding:8px 12px; font-size:12px" id="userName"></div>
+      <button class="btn secondary" id="logoutBtn" style="width:100%">退出登录</button>
+    </div>
+  </aside>
+
+  <main class="content">
+    <!-- 概览 -->
+    <section id="page-overview">
+      <h2 style="margin-bottom:16px">概览</h2>
+      <div class="stats-grid" id="ovCards"></div>
+      <div class="card">
+        <h3>近 7 天全站流量</h3>
+        <div id="ovChart"></div>
+      </div>
+    </section>
+
+    <!-- 我的端口 -->
+    <section id="page-ports" class="hidden">
+      <div class="toolbar">
+        <h2 style="margin:0">我的端口</h2>
+        <div class="spacer"></div>
+        <button class="btn" id="addPortBtn">+ 添加转发规则</button>
+      </div>
+      <div class="card">
+        <h3>我分配的端口段</h3>
+        <div id="myRanges" class="mono muted" style="margin-bottom:16px"></div>
+        <div class="table-wrap"><table id="portsTable"><thead><tr>
+          <th>端口</th><th>类型</th><th>协议</th><th>目标地址</th><th>状态</th><th>已用流量</th><th>连接数</th><th>操作</th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- 使用记录 -->
+    <section id="page-records" class="hidden">
+      <h2 style="margin-bottom:16px">我的使用记录</h2>
+      <div class="card">
+        <div class="table-wrap"><table id="recordsTable"><thead><tr>
+          <th>时间</th><th>端口</th><th>类型</th><th>协议</th><th>来源 IP</th><th>动作</th><th>目标</th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- 修改密码 -->
+    <section id="page-password" class="hidden">
+      <h2 style="margin-bottom:16px">修改密码</h2>
+      <div class="card" style="max-width:420px">
+        <div class="form-row"><label>原密码</label><input type="password" id="pwOld"></div>
+        <div class="form-row"><label>新密码</label><input type="password" id="pwNew"></div>
+        <div class="form-row"><label>确认新密码</label><input type="password" id="pwNew2"></div>
+        <button class="btn" id="pwBtn">修改密码</button>
+      </div>
+    </section>
+  </main>
+</div>
+<script src="/static/app.js"></script>
+<script src="/static/user.js"></script>
+</body>
+</html>

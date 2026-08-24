@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>注册 - 转发面板</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-box">
+      <h1>注册账号</h1>
+      <div class="desc" id="regDesc">自助注册请填写以下信息</div>
+      <div class="form-row">
+        <label>用户名</label>
+        <input type="text" id="username" autocomplete="username">
+      </div>
+      <div class="form-row">
+        <label>密码</label>
+        <input type="password" id="password" autocomplete="new-password">
+      </div>
+      <div class="form-row">
+        <label>确认密码</label>
+        <input type="password" id="password2" autocomplete="new-password">
+      </div>
+      <button class="btn" id="regBtn">注 册</button>
+      <div class="auth-foot">已有账号？<a href="/login">立即登录</a></div>
+    </div>
+  </div>
+  <script src="/static/app.js"></script>
+  <script>
+    (async function () {
+      await onloadGuard();
+      async function doRegister() {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+        const password2 = document.getElementById('password2').value;
+        if (!username || !password) { toast('请填写完整', 'err'); return; }
+        if (password !== password2) { toast('两次密码不一致', 'err'); return; }
+        if (password.length < 6) { toast('密码至少 6 位', 'err'); return; }
+        const btn = document.getElementById('regBtn');
+        btn.disabled = true;
+        try {
+          const d = await api('POST', '/api/register', { username, password });
+          toast('注册成功');
+          location.href = d.role === 'admin' ? '/admin' : '/user';
+        } catch (err) {
+          toast(err.message, 'err');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+      document.getElementById('regBtn').addEventListener('click', doRegister);
+      document.getElementById('password2').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') doRegister();
+      });
+    })();
+  </script>
+</body>
+</html>
