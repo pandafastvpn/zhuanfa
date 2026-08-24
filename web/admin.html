@@ -28,6 +28,10 @@
     <section id="page-dashboard">
       <h2 style="margin-bottom:16px">仪表盘</h2>
       <div class="stats-grid" id="dashCards"></div>
+      <div class="monitor-grid">
+        <div class="card"><div class="monitor-title"><h3>整体速度</h3><select id="netInterface"><option value="">全部网卡</option></select></div><div class="speed-grid"><div><span>↑ 上传</span><strong id="netUpload">0 B/s</strong></div><div><span>↓ 下载</span><strong id="netDownload">0 B/s</strong></div></div></div>
+        <div class="card"><h3>系统状态</h3><div id="systemStatus" class="system-status"></div></div>
+      </div>
       <div class="card">
         <h3>近 7 天流量</h3>
         <div id="dashChart"></div>

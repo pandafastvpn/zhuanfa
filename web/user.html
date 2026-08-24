@@ -38,13 +38,16 @@
       <div class="toolbar">
         <h2 style="margin:0">我的端口</h2>
         <div class="spacer"></div>
+        <button class="btn secondary" id="batchDeleteBtn" disabled>删除已选</button>
+        <button class="btn secondary" id="batchAddBtn">批量添加</button>
         <button class="btn" id="addPortBtn">+ 添加转发规则</button>
       </div>
       <div class="card">
         <h3>我分配的端口段</h3>
         <div id="myRanges" class="mono muted" style="margin-bottom:16px"></div>
+        <div class="pagination"><label>每页显示 <select id="portsPageSize"><option value="20">20</option><option value="50">50</option><option value="100">100</option><option value="all">全部</option></select></label><button class="btn sm secondary" id="portsPrev">上一页</button><span id="portsPageInfo"></span><button class="btn sm secondary" id="portsNext">下一页</button></div>
         <div class="table-wrap"><table id="portsTable"><thead><tr>
-          <th>端口</th><th>类型</th><th>协议</th><th>目标地址</th><th>状态</th><th>已用流量</th><th>连接数</th><th>操作</th>
+          <th><input type="checkbox" id="portsSelectAll" title="选择本页全部"></th><th>端口</th><th>类型</th><th>协议</th><th>目标地址</th><th>状态</th><th>已用流量</th><th>连接数</th><th>操作</th>
         </tr></thead><tbody></tbody></table></div>
       </div>
     </section>
