@@ -1,1 +1,42 @@
-
+{
+  "seq": 2,
+  "users": [
+    {
+      "id": 2,
+      "username": "admin",
+      "salt": "TFpJmgIMtMN0JTRnL9TxFg==",
+      "password": "WGo6ZPoWkGrjF2fRLQdrrdKkn9mtvGPmkKeaqb+28So=",
+      "role": "admin",
+      "group_id": 1,
+      "enabled": true,
+      "expire_at": 0,
+      "ranges": [],
+      "note": "",
+      "created_at": 1787569521,
+      "total_bytes": 0
+    }
+  ],
+  "groups": [
+    {
+      "id": 1,
+      "name": "默认组",
+      "bandwidth_mbps": 0,
+      "quota_gb": 0,
+      "enabled": true,
+      "total_bytes": 0,
+      "created_at": 1787569521
+    }
+  ],
+  "ports": null,
+  "settings": {
+    "allow_register": false,
+    "default_group_id": 1,
+    "realm_bin": "/usr/local/bin/realm",
+    "realm_config_path": "testdata\\realm.toml",
+    "realm_log_path": "testdata\\realm.log",
+    "forward_mode": "realm",
+    "records_limit": 3000
+  },
+  "realm_ports": {},
+  "daily": {}
+}
