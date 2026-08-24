@@ -2,6 +2,8 @@
 
 let USERS = [];
 let GROUPS = [];
+let dashboardTimer = null;
+let selectedInterface = '';
 
 async function initAdmin() {
   const me = await onloadGuard();
@@ -19,6 +21,7 @@ async function initAdmin() {
     n.classList.add('active');
     document.querySelectorAll('.content > section').forEach(s => s.classList.add('hidden'));
     document.getElementById('page-' + n.dataset.page).classList.remove('hidden');
+    if (n.dataset.page !== 'dashboard') stopDashboardMonitor();
     loadPage(n.dataset.page);
   }));
 
@@ -56,6 +59,7 @@ async function loadDashboard() {
     c.value + '</div><div class="sub">' + c.sub + '</div></div>').join('');
 
   barChart(document.getElementById('dashChart'), d.last7 || []);
+  startDashboardMonitor();
 
   const tbody = document.querySelector('#dashRecent tbody');
   if (!(d.recent || []).length) {
@@ -68,6 +72,48 @@ async function loadDashboard() {
     '</td><td class="mono">' + esc(r.source) + '</td><td>' + actionBadge(r.action) +
     '</td><td class="mono">' + esc(r.target || '-') + '</td></tr>').join('');
 }
+
+function fmtDuration(seconds) {
+  seconds = Math.max(0, Math.floor(Number(seconds || 0)));
+  const d = Math.floor(seconds / 86400); seconds %= 86400;
+  const h = Math.floor(seconds / 3600); seconds %= 3600;
+  const m = Math.floor(seconds / 60);
+  return (d ? d + ' 天 ' : '') + h + ' 小时 ' + m + ' 分钟';
+}
+
+function pct(used, total) { return total ? Math.min(100, Math.round(used * 100 / total)) : 0; }
+
+function monitorRow(label, used, total, suffix) {
+  const p = pct(used, total);
+  return '<div class="monitor-row"><div><b>' + label + '</b><span>' + esc(fmtBytes(used)) + ' / ' + esc(fmtBytes(total)) + (suffix || '') + '</span></div><strong>' + p + '%</strong><div class="progress"><div style="width:' + p + '%"></div></div></div>';
+}
+
+async function refreshDashboardMonitor() {
+  const d = await api('GET', '/api/admin/system-status' + (selectedInterface ? '?interface=' + encodeURIComponent(selectedInterface) : ''));
+  const select = document.getElementById('netInterface');
+  if (!select) return;
+  const names = Object.keys(d.interfaces || {}).sort();
+  if (select.options.length <= 1) {
+    names.forEach(name => { const o = document.createElement('option'); o.value = name; o.textContent = name; select.appendChild(o); });
+    select.value = selectedInterface;
+    select.onchange = () => { selectedInterface = select.value; refreshDashboardMonitor().catch(e => toast(e.message, 'err')); };
+  }
+  document.getElementById('netUpload').textContent = fmtBytes(d.tx_bps) + '/s';
+  document.getElementById('netDownload').textContent = fmtBytes(d.rx_bps) + '/s';
+  document.getElementById('systemStatus').innerHTML =
+    '<div class="system-cpu"><b>CPU</b><strong>' + Number(d.cpu_percent || 0).toFixed(1) + '%</strong><span>' + d.cpu_cores + ' 核</span></div>' +
+    monitorRow('内存', d.mem_used, d.mem_total) +
+    monitorRow('交换分区', d.swap_used, d.swap_total) +
+    monitorRow('存储', d.disk_used, d.disk_total) +
+    '<div class="system-meta"><span>TCP 连接 <b>' + d.tcp_connections + '</b></span><span>UDP 连接 <b>' + d.udp_connections + '</b></span><span>服务器运行 <b>' + fmtDuration(d.uptime_seconds) + '</b></span><span>面板运行 <b>' + fmtDuration(d.panel_uptime_seconds) + '</b></span></div>';
+}
+
+function startDashboardMonitor() {
+  if (dashboardTimer) return;
+  refreshDashboardMonitor().catch(e => toast(e.message, 'err'));
+  dashboardTimer = setInterval(() => refreshDashboardMonitor().catch(() => {}), 2000);
+}
+function stopDashboardMonitor() { if (dashboardTimer) { clearInterval(dashboardTimer); dashboardTimer = null; } }
 
 // ---------------- 用户管理 ----------------
 

@@ -159,6 +159,25 @@ input:focus, select:focus { border-color: var(--accent); }
 
 .toolbar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 .toolbar .spacer { flex: 1; }
+.pagination { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin: 0 0 14px; color: var(--text2); }
+.pagination label { display: flex; align-items: center; gap: 6px; }
+.pagination select { width: auto; padding: 5px 8px; }
+.monitor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.monitor-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.monitor-title h3 { margin: 0; }
+.monitor-title select { width: 150px; padding: 5px 8px; }
+.speed-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.speed-grid span, .system-cpu span, .monitor-row span { display: block; color: var(--text2); font-size: 12px; }
+.speed-grid strong { display: block; margin-top: 5px; font-size: 25px; color: var(--green); }
+.speed-grid > div:last-child strong { color: var(--accent2); }
+.system-status { display: grid; gap: 13px; }
+.system-cpu { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; align-items: center; }
+.system-cpu strong { font-size: 20px; color: var(--green); }
+.system-cpu span { grid-column: 1 / -1; }
+.monitor-row { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; }
+.monitor-row .progress { grid-column: 1 / -1; width: 100%; }
+.system-meta { display: flex; gap: 12px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--border); color: var(--text2); font-size: 12px; }
+.system-meta b { color: var(--text); margin-left: 3px; }
 
 /* ---------- 弹窗 ---------- */
 .modal-mask {
@@ -247,3 +266,10 @@ input:focus, select:focus { border-color: var(--accent); }
 }
 .progress > div { height: 100%; background: var(--accent); }
 .progress.over > div { background: var(--red); }
+
+@media (max-width: 720px) {
+  .content { padding: 20px 16px; }
+  .sidebar { width: 176px; padding: 16px 8px; }
+  .monitor-grid { grid-template-columns: 1fr; }
+  .pagination { justify-content: flex-start; flex-wrap: wrap; }
+}

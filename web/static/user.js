@@ -1,5 +1,9 @@
 // ---------------- 用户中心逻辑 ----------------
 
+const selectedPortIDs = new Set();
+let portsPage = 1;
+let portsPageSize = '20';
+
 async function initUser() {
   const me = await onloadGuard();
   if (!me) return;
@@ -69,26 +73,46 @@ async function loadOverview() {
 // ---------------- 我的端口 ----------------
 
 async function loadMyPorts() {
-  const d = await api('GET', '/api/user/ports');
+  const d = await api('GET', '/api/user/ports?page=' + portsPage + '&page_size=' + encodeURIComponent(portsPageSize));
   const ranges = (d.ranges || []).map(r => r.start + ' - ' + r.end).join('、') || '暂无分配端口段，请联系管理员';
   document.getElementById('myRanges').textContent = '端口段: ' + ranges;
 
   const tbody = document.querySelector('#portsTable tbody');
   tbody.innerHTML = (d.ports || []).map(p =>
-    '<tr><td class="mono" style="font-weight:600">' + p.port + '</td><td>' + typeBadge(p) +
+    '<tr><td><input type="checkbox" class="port-select" data-id="' + p.id + '"' + (selectedPortIDs.has(p.id) ? ' checked' : '') + '></td><td class="mono" style="font-weight:600">' + p.port + '</td><td>' + typeBadge(p) +
     '</td><td>' + allowedLabel(p.allowed) + '</td><td class="mono">' + esc(p.target) + '</td><td>' +
     (p.enabled ? '<span class="badge green">启用</span>' : '<span class="badge gray">停用</span>') +
     '</td><td>' + fmtBytes(p.total_bytes) + '</td><td>' + p.total_conns + '</td><td>' +
     '<button class="btn sm secondary" data-edit="' + p.id + '">编辑</button> ' +
     '<button class="btn sm danger" data-del="' + p.id + '">删除</button></td></tr>').join('') ||
-    '<tr><td colspan="8" class="empty">暂无转发规则，点击右上角添加</td></tr>';
+    '<tr><td colspan="9" class="empty">暂无转发规则，点击右上角添加</td></tr>';
 
+  portsPage = d.page || 1;
+  const pageSize = document.getElementById('portsPageSize');
+  pageSize.value = portsPageSize;
+  pageSize.onchange = () => { portsPageSize = pageSize.value; portsPage = 1; loadMyPorts(); };
+  document.getElementById('portsPageInfo').textContent = '第 ' + portsPage + ' / ' + (d.total_pages || 1) + ' 页，共 ' + (d.total || 0) + ' 条';
+  const prev = document.getElementById('portsPrev'); const next = document.getElementById('portsNext');
+  prev.disabled = portsPage <= 1;
+  next.disabled = portsPage >= (d.total_pages || 1);
+  prev.onclick = () => { if (portsPage > 1) { portsPage--; loadMyPorts(); } };
+  next.onclick = () => { if (portsPage < (d.total_pages || 1)) { portsPage++; loadMyPorts(); } };
+
+  const selectAll = document.getElementById('portsSelectAll');
+  const checkboxes = tbody.querySelectorAll('.port-select');
+  selectAll.checked = checkboxes.length > 0 && Array.from(checkboxes).every(b => b.checked);
+  selectAll.onchange = () => { checkboxes.forEach(b => { b.checked = selectAll.checked; if (b.checked) selectedPortIDs.add(Number(b.dataset.id)); else selectedPortIDs.delete(Number(b.dataset.id)); }); updateBatchDeleteButton(); };
+  checkboxes.forEach(b => b.onchange = () => { if (b.checked) selectedPortIDs.add(Number(b.dataset.id)); else selectedPortIDs.delete(Number(b.dataset.id)); selectAll.checked = checkboxes.length > 0 && Array.from(checkboxes).every(x => x.checked); updateBatchDeleteButton(); });
+  updateBatchDeleteButton();
+  document.getElementById('batchDeleteBtn').onclick = batchDeletePorts;
+  document.getElementById('batchAddBtn').onclick = batchAddModal;
   document.getElementById('addPortBtn').onclick = () => portModal(null, d.free || []);
   tbody.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => portModal(d.ports.find(p => p.id == b.dataset.edit), []));
   tbody.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
     const p = d.ports.find(x => x.id == b.dataset.del);
     confirmModal('删除转发规则', '确定删除端口 ' + p.port + ' 的转发规则？', async () => {
       await api('DELETE', '/api/user/ports/' + p.id);
+      selectedPortIDs.delete(p.id);
       toast('已删除');
       loadMyPorts();
     });
@@ -140,6 +164,49 @@ function portModal(p, freePorts) {
       }
       loadMyPorts();
     }, p.id ? '保存' : '创建');
+}
+
+function updateBatchDeleteButton() {
+  const btn = document.getElementById('batchDeleteBtn');
+  if (!btn) return;
+  btn.disabled = selectedPortIDs.size === 0;
+  btn.textContent = selectedPortIDs.size ? '删除已选 (' + selectedPortIDs.size + ')' : '删除已选';
+}
+
+function batchDeletePorts() {
+  const ids = Array.from(selectedPortIDs);
+  if (!ids.length) return;
+  confirmModal('删除已选规则', '确定删除已选的 ' + ids.length + ' 条转发规则？', async () => {
+    await api('POST', '/api/user/ports/batch-delete', { ids });
+    selectedPortIDs.clear();
+    toast('已删除 ' + ids.length + ' 条规则');
+    loadMyPorts();
+  }, '确认删除');
+}
+
+function batchAddModal() {
+  openModal('批量添加转发规则',
+    '<div class="form-row"><label>规则列表（每行：转发端口:目标地址；IPv6 目标请写为 [IPv6]:端口）</label><textarea id="batchRules" rows="9" placeholder="10000:1.2.3.4:51820\n10001:[2001:db8::1]:1194"></textarea></div>' +
+    '<div class="form-row"><label>监听类型</label><div class="checkbox-row"><label><input type="checkbox" id="batchTcp" checked> TCP</label><label><input type="checkbox" id="batchUdp"> UDP</label></div></div>' +
+    '<div class="form-row"><label>协议白名单</label><select id="batchAllowed"><option value="auto">自动识别（三种均可）</option><option value="socks5">仅 SOCKS5</option><option value="wireguard">仅 WireGuard</option><option value="openvpn">仅 OpenVPN</option></select></div>' +
+    '<div class="form-row"><label>状态</label><select id="batchEnabled"><option value="true">启用</option><option value="false">停用</option></select></div>',
+    async (body) => {
+      const tcp = body.querySelector('#batchTcp').checked;
+      const udp = body.querySelector('#batchUdp').checked;
+      if (!tcp && !udp) throw new Error('至少选择 TCP 或 UDP');
+      const lines = body.querySelector('#batchRules').value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!lines.length) throw new Error('请至少输入一条规则');
+      if (lines.length > 200) throw new Error('一次最多添加 200 条规则');
+      const rules = lines.map((line, index) => {
+        const match = line.match(/^(\d+)\s*:\s*(.+)$/);
+        if (!match) throw new Error('第 ' + (index + 1) + ' 行格式错误，应为 转发端口:目标地址');
+        return { port: Number(match[1]), target: match[2].trim(), tcp, udp, allowed: body.querySelector('#batchAllowed').value, enabled: body.querySelector('#batchEnabled').value === 'true' };
+      });
+      await api('POST', '/api/user/ports/batch', { rules });
+      toast('已添加 ' + rules.length + ' 条规则');
+      portsPage = 1;
+      loadMyPorts();
+    }, '批量添加');
 }
 
 // ---------------- 使用记录 ----------------
