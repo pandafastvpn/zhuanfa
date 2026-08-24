@@ -17,6 +17,8 @@ type App struct {
 	sessions *SessionStore
 	realm    *RealmManager
 	relay    *Relay
+	sampler  *systemSampler
+	started  time.Time
 }
 
 // ---------------- 工具函数 ----------------
@@ -278,6 +280,11 @@ func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------- 管理后台 ----------------
+
+func (a *App) handleAdminSystemStatus(w http.ResponseWriter, r *http.Request) {
+	iface := r.URL.Query().Get("interface")
+	a.ok(w, a.sampler.Status(iface, a.relay, a.started))
+}
 
 func (a *App) handleAdminStats(w http.ResponseWriter, r *http.Request) {
 	st := a.store.SettingsView()
@@ -851,10 +858,40 @@ func (a *App) handleAdminRealmReload(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleUserPorts(w http.ResponseWriter, r *http.Request, me *User) {
 	switch r.Method {
 	case http.MethodGet:
-		ports := a.store.PortsOfUser(me.ID)
+		allPorts := a.store.PortsOfUser(me.ID)
+		page := 1
+		if n, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && n > 0 {
+			page = n
+		}
+		pageSize := 20
+		if raw := r.URL.Query().Get("page_size"); raw == "all" {
+			pageSize = len(allPorts)
+		} else if n, err := strconv.Atoi(raw); err == nil && (n == 20 || n == 50 || n == 100) {
+			pageSize = n
+		}
+		total := len(allPorts)
+		totalPages := 1
+		if pageSize > 0 {
+			totalPages = (total + pageSize - 1) / pageSize
+			if totalPages < 1 {
+				totalPages = 1
+			}
+		}
+		if page > totalPages {
+			page = totalPages
+		}
+		start, end := 0, total
+		if pageSize > 0 {
+			start = (page - 1) * pageSize
+			end = start + pageSize
+			if end > total {
+				end = total
+			}
+		}
+		ports := allPorts[start:end]
 		// 生成可用的空闲端口建议（每个端口段最多 50 个）
 		used := map[int]bool{}
-		for _, p := range ports {
+		for _, p := range allPorts {
 			used[p.Port] = true
 		}
 		var free []int
@@ -868,9 +905,13 @@ func (a *App) handleUserPorts(w http.ResponseWriter, r *http.Request, me *User) 
 			}
 		}
 		a.ok(w, map[string]interface{}{
-			"ports":  ports,
-			"ranges": me.Ranges,
-			"free":   free,
+			"ports":       ports,
+			"ranges":      me.Ranges,
+			"free":        free,
+			"total":       total,
+			"page":        page,
+			"page_size":   pageSize,
+			"total_pages": totalPages,
 		})
 	case http.MethodPost:
 		var req struct {
@@ -925,6 +966,97 @@ func (a *App) handleUserPorts(w http.ResponseWriter, r *http.Request, me *User) 
 	default:
 		a.fail(w, http.StatusMethodNotAllowed, "method not allowed")
 	}
+}
+
+func (a *App) handleUserPortsBatch(w http.ResponseWriter, r *http.Request, me *User) {
+	var req struct {
+		Rules []struct {
+			Port    int    `json:"port"`
+			TCP     bool   `json:"tcp"`
+			UDP     bool   `json:"udp"`
+			Target  string `json:"target"`
+			Allowed string `json:"allowed"`
+			Enabled bool   `json:"enabled"`
+		} `json:"rules"`
+	}
+	if err := readJSON(r, &req); err != nil || len(req.Rules) == 0 || len(req.Rules) > 200 {
+		a.fail(w, http.StatusBadRequest, "请求格式错误：一次最多添加 200 条规则")
+		return
+	}
+	seen := map[int]bool{}
+	for i, rule := range req.Rules {
+		if rule.Port < 1 || rule.Port > 65535 {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：端口号必须在 1-65535 之间", i+1))
+			return
+		}
+		if seen[rule.Port] {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：端口 %d 在本次批量添加中重复", i+1, rule.Port))
+			return
+		}
+		seen[rule.Port] = true
+		if a.store.PortByNum(rule.Port) != nil {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：端口 %d 已被使用", i+1, rule.Port))
+			return
+		}
+		if !me.InRange(rule.Port) {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：端口 %d 不在您的端口段内", i+1, rule.Port))
+			return
+		}
+		if !rule.TCP && !rule.UDP {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：至少选择 TCP 或 UDP 之一", i+1))
+			return
+		}
+		if !validTarget(rule.Target) {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：目标地址格式应为 ip/host:端口", i+1))
+			return
+		}
+		if !validAllowed(rule.Allowed) {
+			a.fail(w, http.StatusBadRequest, fmt.Sprintf("第 %d 行：协议设置无效", i+1))
+			return
+		}
+	}
+	ports := make([]*Port, 0, len(req.Rules))
+	a.store.mu.Lock()
+	for _, rule := range req.Rules {
+		p := &Port{ID: a.store.NextID(), UserID: me.ID, Port: rule.Port, TCP: rule.TCP, UDP: rule.UDP, Target: rule.Target, Allowed: rule.Allowed, Enabled: rule.Enabled, CreatedAt: time.Now().Unix()}
+		a.store.db.Ports = append(a.store.db.Ports, p)
+		ports = append(ports, p)
+	}
+	a.store.mu.Unlock()
+	if err := a.store.saveDB(); err != nil {
+		a.fail(w, http.StatusInternalServerError, "保存规则失败")
+		return
+	}
+	a.applyPorts()
+	a.ok(w, ports)
+}
+
+func (a *App) handleUserPortsBatchDelete(w http.ResponseWriter, r *http.Request, me *User) {
+	var req struct { IDs []int `json:"ids"` }
+	if err := readJSON(r, &req); err != nil || len(req.IDs) == 0 || len(req.IDs) > 200 {
+		a.fail(w, http.StatusBadRequest, "请求格式错误：请选择要删除的规则")
+		return
+	}
+	ids := map[int]bool{}
+	for _, id := range req.IDs {
+		p := a.store.PortByID(id)
+		if p == nil || p.UserID != me.ID {
+			a.fail(w, http.StatusBadRequest, "存在无权删除或不存在的规则")
+			return
+		}
+		ids[id] = true
+	}
+	a.store.mu.Lock()
+	keep := make([]*Port, 0, len(a.store.db.Ports))
+	for _, p := range a.store.db.Ports {
+		if !ids[p.ID] { keep = append(keep, p) }
+	}
+	a.store.db.Ports = keep
+	a.store.mu.Unlock()
+	for id := range ids { a.realm.freeInternalPort(id) }
+	if err := a.store.saveDB(); err != nil { a.fail(w, http.StatusInternalServerError, "保存规则失败"); return }
+	a.applyPorts()
+	a.ok(w, nil)
 }
 
 func (a *App) handleUserPortItem(w http.ResponseWriter, r *http.Request, me *User, id int) {
@@ -1084,6 +1216,8 @@ func (a *App) routeAdmin(w http.ResponseWriter, r *http.Request, sub string) {
 	switch {
 	case sub == "stats":
 		a.handleAdminStats(w, r)
+	case sub == "system-status":
+		a.handleAdminSystemStatus(w, r)
 	case sub == "users":
 		a.handleAdminUsers(w, r)
 	case sub == "records":
@@ -1163,6 +1297,12 @@ func (a *App) routeUser(w http.ResponseWriter, r *http.Request, sub string, me *
 		a.handleUserUsage(w, r, me)
 	case sub == "password":
 		a.handleUserPassword(w, r, me)
+	case sub == "ports/batch":
+		if r.Method != http.MethodPost { a.fail(w, http.StatusMethodNotAllowed, "method not allowed"); return }
+		a.handleUserPortsBatch(w, r, me)
+	case sub == "ports/batch-delete":
+		if r.Method != http.MethodPost { a.fail(w, http.StatusMethodNotAllowed, "method not allowed"); return }
+		a.handleUserPortsBatchDelete(w, r, me)
 	case strings.HasPrefix(sub, "ports/"):
 		id, err := strconv.Atoi(strings.TrimPrefix(sub, "ports/"))
 		if err != nil {

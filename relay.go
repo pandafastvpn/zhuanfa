@@ -127,6 +127,20 @@ func (r *Relay) ResetUserTraffic(userID int) bool {
 	return r.store.ResetUserTraffic(userID)
 }
 
+// ActiveCounts 返回当前活跃的 TCP 与 UDP 转发会话数。
+func (r *Relay) ActiveCounts() (tcp, udp int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, c := range r.conns {
+		if c.proto == "tcp" {
+			tcp++
+		} else if c.proto == "udp" {
+			udp++
+		}
+	}
+	return tcp, udp
+}
+
 func (r *Relay) Stop() {
 	r.mu.Lock()
 	if r.stopCh != nil {

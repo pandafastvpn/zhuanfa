@@ -30,7 +30,7 @@ func main() {
 
 	realm := NewRealmManager(store)
 	relay := NewRelay(store, realm)
-	app := &App{store: store, sessions: sessions, realm: realm, relay: relay}
+	app := &App{store: store, sessions: sessions, realm: realm, relay: relay, sampler: newSystemSampler(), started: time.Now()}
 
 	// 先应用 realm 配置（若已启用 realm 模式且二进制存在则启动）
 	if err := realm.apply(); err != nil {

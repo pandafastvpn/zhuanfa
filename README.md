@@ -35,7 +35,7 @@
 
 ```bash
 apt-get update && apt-get install -y git
-git clone https://github.com/pandafastvpn/zhuanfa.git && cd zhuanfa
+git clone <本项目地址> && cd zhuanfa
 bash install.sh
 ```
 
